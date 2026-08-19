@@ -1,19 +1,23 @@
 ---
 name: Feature request
-about: Suggest a new feature or improvement for the benchmark engine
+about: Propose a new agent adapter, sandbox capability, or metric for BCA
 title: "[FEATURE] "
 labels: enhancement
 assignees: ''
 ---
 
 ## Description
-<!-- A clear and concise description of the feature or improvement you'd like to see. -->
+<!-- A clear description of the feature you would like to see added. -->
 
-## Suggested solution / implementation
-<!-- How do you imagine this being implemented? Include API sketches, CLI flags, file locations, or pseudocode if helpful. -->
+## Target Component
+- [ ] `bca/agent/` (e.g. New Coding Agent Adapter)
+- [ ] `bca/sandbox/` (e.g. New Isolation/Container Driver)
+- [ ] `datasets/` (e.g. New Benchmark Category/Task)
+- [ ] `bca/interfaces/` (e.g. CLI/TUI/Web enhancement)
+- [ ] `bca/package/` (e.g. Exporter/Metrics)
 
-## Why this feature is needed
-<!-- What problem does it solve? Who benefits, and how does it improve the benchmarking workflow? -->
+## Suggested Solution
+<!-- How should this be implemented? Include CLI sketches or interfaces. -->
 
-## Additional context
-<!-- Links to related issues, references, prior art, or screenshots. -->
+## Why is this feature needed?
+<!-- Why is this valuable for benchmarking autonomous coding agents? -->

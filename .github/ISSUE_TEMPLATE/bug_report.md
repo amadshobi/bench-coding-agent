@@ -1,37 +1,36 @@
 ---
 name: Bug report
-about: Report a problem or unexpected behavior in the benchmark engine
+about: Report an unexpected failure or issue in BCA
 title: "[BUG] "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
 ## Description
-<!-- A clear and concise description of what the bug is. -->
 
-## Steps to reproduce
-<!-- How can we reproduce the issue? Provide the exact commands or actions. -->
-1.
-2.
-3.
+<!-- A clear and concise description of the bug. -->
 
-## Expected behavior
+## Steps to Reproduce
+
+1. Run command: `python3 -m bca run --agent ... --task ...`
+2. Sandbox mode: `local` / `shadow` / `docker`
+3. Error encountered:
+
+## Expected Behavior
+
 <!-- What did you expect to happen? -->
 
-## Actual behavior
-<!-- What actually happened? Include error messages, stack traces, or logs. -->
+## Actual Behavior
+
+<!-- What actually happened? Include stdout/stderr outputs or stack traces. -->
 
 ```
-<!-- Paste relevant output, tracebacks, or logs here -->
+<!-- Paste terminal output here -->
 ```
 
 ## Environment
-<!-- Fill in the details below so we can reproduce your setup. -->
-- **OS**: (e.g. Ubuntu 24.04, macOS 15, Windows 11)
-- **Python version**: (e.g. 3.14.4)
-- **Benchmark Engine version / commit**: (e.g. `git rev-parse HEAD`)
-- **Provider(s) used**: (e.g. OpenRouter)
-- **Other relevant versions**:
 
-## Additional context
-<!-- Add any other context about the problem here: screenshots, related issues, recent changes, etc. -->
+- **OS**: Linux / macOS
+- **Bubblewrap version (`bwrap --version`)**:
+- **Python version**:
+- **BCA Version / Commit**: `git rev-parse --short HEAD`

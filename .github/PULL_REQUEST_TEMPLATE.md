@@ -1,16 +1,22 @@
 ## Description
 
-<!-- Briefly explain why this PR is submitted. What problem does it solve, and what change does it make? Link any related issue (e.g. Closes #123). -->
+<!-- Briefly explain what changes this PR introduces. What problem does it solve? Link related issues (e.g. Closes #12). -->
+
+## Type of Change
+
+- [ ] `feat`: New feature (e.g. agent adapter, sandbox mode, metric)
+- [ ] `fix`: Bug fix
+- [ ] `dataset`: New benchmark task or verifier improvement
+- [ ] `refactor`: Code refactoring without behavioral change
+- [ ] `docs`: Documentation updates
 
 ## Checklist
 
-Please confirm the following before requesting review:
+- [ ] Code conforms to project conventions and AGENTS.md
+- [ ] Added or updated unit tests in `tests/`
+- [ ] Verified tests pass locally (`python3 -m unittest discover -s tests -p "test_*.py"`)
+- [ ] No sensitive keys or tokens in code or logs
 
-- [ ] Code follows existing style guidelines
-- [ ] Added unit tests
-- [ ] Updated documentation/README
-- [ ] Verified changes in a local benchmark run
+## Notes for Reviewers
 
-## Notes for reviewers
-
-<!-- Anything specific you'd like reviewers to focus on, known limitations, or follow-up work. -->
+<!-- Mention specific areas to inspect or design choices made. -->

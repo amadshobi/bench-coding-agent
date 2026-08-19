@@ -1,78 +1,68 @@
-# Contributing to CIVIL Benchmark Engine
+# Contributing to BCA (Bench Coding Agent)
 
-Terima kasih sudah tertarik berkontribusi! 🎉 Proyek ini hidup dari kontribusi komunitas. Panduan ini akan membantu kamu mulai berkontribusi dengan lancar.
+Terima kasih sudah tertarik berkontribusi ke **BCA**! 🎉  
+BCA adalah autonomous sandboxed benchmark framework untuk mengevaluasi coding agents secara empiris.
 
-## 📋 Cara Berkontribusi (Alur Singkat)
+---
 
-1. **Fork** — Fork repositori ini ke akun GitHub kamu.
-2. **Clone** — Clone fork kamu ke lokal:
+## 📋 Alur Kontribusi
+
+1. **Fork** repository ke akun GitHub kamu:
+
    ```bash
-   git clone https://github.com/<username>/benchmark-engine.git
-   cd benchmark-engine
+   git clone https://github.com/amadshobi/bench-coding-agent.git
+   cd bench-coding-agent
    ```
-3. **Develop** — Buat branch baru untuk perubahanmu:
+
+2. **Branching**:
+   Buat branch baru dari `main` dengan format `feat/<nama-fitur>` atau `fix/<nama-bug>`:
+
    ```bash
-   git checkout -b feat/my-improvement
+   git checkout -b feat/add-aider-agent
    ```
-4. **Test** — Pastikan perubahanmu lolos uji (lihat di bawah).
-5. **Submit PR** — Push branch dan buka Pull Request ke branch `main` dengan template PR yang disediakan.
 
-## 🛠️ Setup Environment Development
+3. **Verifikasi**:
+   Pastikan seluruh test suite lolos sebelum commit:
 
-Proyek ini **stdlib-only** (tidak ada dependency eksternal). Yang kamu butuhkan:
+   ```bash
+   python3 -m unittest discover -s tests -p "test_*.py"
+   ```
 
-- **Python 3.14.4+**
-- **OpenRouter API key** (untuk menjalankan benchmark sungguhan)
+4. **Commit & PR**:
+   Gunakan format **Conventional Commits**:
+   ```bash
+   git commit -m "feat(agent): add aider cli agent adapter"
+   ```
+   Push branch dan buka Pull Request ke branch `main`.
 
-Langkah setup:
+---
 
-```bash
-# Buat & aktifkan virtual environment (WAJIB)
-python3 -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate         # Windows
+## 🛠️ Menambahkan Task Benchmark Baru
 
-# Copy file environment contoh
-cp .env.example .env
-# Isi OPENROUTER_API_KEY di .env (jangan commit file .env!)
+Setiap task benchmark baru diletakkan di dalam folder `datasets/<category>/<task-name>/`:
+
+```
+datasets/bugfix/my-new-task/
+├── prompt.txt         # Instruksi/tiket issue yang dibaca agent
+├── task.json          # Metadata (title, category, timeout_seconds)
+├── workspace/         # Starter repo dengan bug/skeleton
+└── verify.py          # Script penentu verdict (Exit code 0 = PASS, non-zero = FAIL)
 ```
 
-Menjalankan benchmark secara lokal untuk verifikasi:
+---
 
-```bash
-python3 scripts/blin run
-```
+## 🤖 Menambahkan Adapter Coding Agent Baru
 
-## 📐 Coding Standards
+Untuk menambahkan dukungan agent baru:
 
-- Ikuti **gaya penulisan kode yang sudah ada** di repositori ini (penamaan, struktur modul, docstring).
-- Tetap di dalam batas layer yang benar:
-  - **Router** = routing, **Service** = business logic, **Storage** = penyimpanan data.
-  - Jangan suntik logic ke layer yang salah.
-- Hindari dependency eksternal baru kecuali benar-benar diperlukan.
-- Tulis **unit test** untuk logic baru, dan update dokumentasi/README bila perilaku berubah.
-- Gunakan bahasa Indonesia untuk komentar/diskusi, istilah teknis tetap dalam English.
+1. Buat adapter di `bca/agent/<agent_name>.py` mewarisi `BaseAgent`.
+2. Implementasikan method `build_command(self, instruction: str) -> str`.
+3. Daftarkan di `bca/agent/factory.py`.
 
-## 🐛 Melaporkan Bug & Usulan Fitur
+---
 
-Gunakan **issue template** yang sudah disediakan — jangan buat issue kosong:
+## 📐 Coding Standards & Guidelines
 
-- **Bug report** → jelaskan langkah reproduksi, expected vs actual behavior, dan environment (OS, versi Python, commit).
-- **Feature request** → jelaskan fitur, usulan implementasi, dan alasan kenapa fitur ini dibutuhkan.
-
-Template ini membantu maintainer merespons lebih cepat dan akurat.
-
-## ✅ Sebelum Membuka PR
-
-Pastikan checklist di template PR tercentang:
-
-- [ ] Code follows existing style guidelines
-- [ ] Added unit tests
-- [ ] Updated documentation/README
-- [ ] Verified changes in a local benchmark run
-
-## 💬 Butuh Bantuan?
-
-Jangan ragu untuk membuka issue dengan pertanyaan, atau diskusikan ide sebelum mengerjakan perubahan besar. Kontribusi kecil maupun besar sangat dihargai.
-
-Selamat berkontribusi! 🚀
+- **Zero Junk**: Tidak meninggalkan `TODO`, `FIXME`, atau dead code di commit.
+- **Sandboxed by Default**: Pastikan semua eksekusi runtime berjalan melalui `bca.sandbox`.
+- **Clean Commits**: Format commit `type(scope): description` (lowercase, tanpa trailing period, max 72 karakter, no emojis in commit message).

@@ -1,0 +1,25 @@
+name: BCA Test Suite
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Bubblewrap for Sandboxing
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Run BCA Tests
+        run: python3 -m unittest discover -s tests -p "test_*.py"
