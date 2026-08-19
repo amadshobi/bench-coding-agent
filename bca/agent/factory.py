@@ -1,0 +1,56 @@
+"""Agent factory and registry for instantiating coding agents."""
+
+from typing import Any, Dict, List, Optional
+
+from bca.agent.base import BaseAgent
+from bca.agent.opencode import OpenCodeAgent
+from bca.agent.commandcode import CommandCodeAgent
+from bca.agent.antigravity import AntigravityAgent
+from bca.agent.generic_cli import GenericCLIAgent
+
+
+AGENT_REGISTRY = {
+    "opencode": OpenCodeAgent,
+    "commandcode": CommandCodeAgent,
+    "antigravity": AntigravityAgent,
+}
+
+
+def get_agent(
+    agent_id: str,
+    model_id: Optional[str] = None,
+    extra_env: Optional[Dict[str, str]] = None,
+    flags: Optional[List[str]] = None,
+    command_template: Optional[str] = None,
+    **kwargs: Any,
+) -> BaseAgent:
+    """Instantiate a coding agent by ID or custom template."""
+    normalized_id = agent_id.lower().strip()
+
+    if normalized_id in AGENT_REGISTRY:
+        cls = AGENT_REGISTRY[normalized_id]
+        return cls(
+            agent_id=normalized_id,
+            model_id=model_id,
+            extra_env=extra_env,
+            flags=flags,
+            **kwargs,
+        )
+
+    if command_template:
+        return GenericCLIAgent(
+            agent_id=agent_id,
+            command_template=command_template,
+            model_id=model_id,
+            extra_env=extra_env,
+            flags=flags,
+        )
+
+    # Fallback to Generic CLI assumption: `<agent_id> "<instruction>"`
+    return GenericCLIAgent(
+        agent_id=agent_id,
+        command_template=f"{agent_id} {{instruction}}",
+        model_id=model_id,
+        extra_env=extra_env,
+        flags=flags,
+    )

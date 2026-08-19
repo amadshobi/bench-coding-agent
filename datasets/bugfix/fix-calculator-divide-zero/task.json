@@ -1,0 +1,6 @@
+{
+  "title": "Fix Calculator Zero Division",
+  "category": "bugfix",
+  "difficulty": "easy",
+  "timeout_seconds": 60
+}

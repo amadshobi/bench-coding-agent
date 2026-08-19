@@ -1,0 +1,1 @@
+Fix the division method in `calculator.py` to raise a `ValueError("Cannot divide by zero")` instead of letting ZeroDivisionError crash unhandled, and return float values accurately.
