@@ -1,5 +1,6 @@
-# Core transport
-httpx>=0.27.0
+# BCA (Bench Coding Agent) is standard-library only.
+# Zero external runtime dependencies required.
 
-# This project was originally stdlib-only.
-# httpx added for connection pooling + stream parsing (replaces urllib.request).
+# Optional development tools
+pytest>=8.0.0
+ruff>=0.4.0
