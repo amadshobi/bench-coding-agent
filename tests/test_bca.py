@@ -138,6 +138,35 @@ class TestBCACore(unittest.TestCase):
         openai = get_agent("openai")
         self.assertEqual(openai.agent_id, "gateway")
 
+    def test_pricing_and_config(self):
+        from bca.llm.pricing import PricingEngine
+        from bca.llm.config import BCAConfig
+
+        usd, idr = PricingEngine.calculate_cost("omp/gemini-3.7-flash-tiered", 10000, 500)
+        self.assertGreater(usd, 0)
+        self.assertGreater(idr, 0)
+
+        resolved = BCAConfig.resolve_model("opencode", "gemini-3.7-flash")
+        self.assertEqual(resolved, "omp/gemini-3.7-flash-tiered")
+
+    def test_judge_evaluation_fallback(self):
+        from bca.package.judge import AnalyticsJudgeAgent
+        judge = AnalyticsJudgeAgent(base_url="http://invalid-test-url:9999/v1")
+        datasets_dir = Path(__file__).parent.parent / "datasets"
+        loader = DatasetLoader(datasets_dir)
+        task = loader.load_task("bugfix", "fix-calculator-divide-zero")
+
+        from bca.core.trial import AgentResult
+        from bca.core.types import AgentStatus
+        res = judge.evaluate(
+            task=task,
+            agent_result=AgentResult(status=AgentStatus.COMPLETED, exit_code=0, stdout="done"),
+            verdict=Verdict.PASS,
+            patch_diff="+ x = 1",
+        )
+        self.assertGreaterEqual(res.quality_score, 50.0)
+        self.assertIn("PASS", res.critique)
+
 
 if __name__ == "__main__":
     unittest.main()

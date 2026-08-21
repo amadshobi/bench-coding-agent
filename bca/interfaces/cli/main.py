@@ -12,6 +12,7 @@ from bca.llm.config import BCAConfig
 from bca.runner import TrialRunner
 from bca.storage import SQLiteStorage
 from bca.package import ResultExporter, BenchmarkSummarizer, ContextExporter
+from bca.package.report_cli import ReportCLI
 from bca.core.types import Verdict
 from bca.interfaces.tui import render_tui_dashboard
 from bca.interfaces.web import run_web_server
@@ -97,9 +98,18 @@ def build_parser() -> argparse.ArgumentParser:
     agent_sub = agent_p.add_subparsers(dest="agent_command")
     agent_sub.add_parser("list", help="List all supported agent drivers")
 
-    # `bca report`
-    report_p = subparsers.add_parser("report", help="View benchmark history and stats")
+    # `bca report` / `bca -r`
+    report_p = subparsers.add_parser("report", help="View benchmark leaderboard, markdown, or json reports")
+    report_p.add_argument("-b", "--board", action="store_true", help="Display 4-dimension rankings leaderboard")
+    report_p.add_argument("-md", "--markdown", action="store_true", help="Render formatted markdown report")
+    report_p.add_argument("--json", action="store_true", help="Output machine-readable JSON data")
     report_p.add_argument("--limit", type=int, default=20, help="Number of records to show")
+
+    # Top-level short -r flag support
+    parser.add_argument("-r", "--report", action="store_true", help="Quick report trigger")
+    parser.add_argument("-b", "--board", action="store_true", help="Show leaderboard")
+    parser.add_argument("-md", "--markdown", action="store_true", help="Show markdown")
+    parser.add_argument("--json", action="store_true", help="Show JSON")
 
     # `bca tui`
     tui_p = subparsers.add_parser("tui", help="Launch terminal dashboard monitor")
@@ -278,23 +288,20 @@ def handle_list(list_type: str, datasets_dir_str: str = "datasets") -> int:
     return 0
 
 
-def handle_report(args: argparse.Namespace) -> int:
+def handle_report_dispatch(board: bool, markdown: bool, json_mode: bool, limit: int) -> int:
     db_path = Path.cwd() / "results" / "bca.sqlite3"
-    if not db_path.exists():
-        print("ℹ️ No benchmark trials found in database.")
+    results_dir = Path.cwd() / "results"
+
+    if json_mode:
+        ReportCLI.render_json(db_path, limit=limit)
         return 0
 
-    storage = SQLiteStorage(db_path)
-    trials = storage.list_trials(limit=args.limit)
-    stats = storage.get_summary_stats()
+    if markdown:
+        ReportCLI.render_markdown(results_dir)
+        return 0
 
-    print(f"\n📊 BCA Summary: Total Runs: {stats['total_runs']} | Pass Rate: {stats['pass_rate_pct']}%")
-    print("-" * 75)
-    print(f"{'Trial ID':<10} │ {'Category':<10} │ {'Task':<15} │ {'Agent':<10} │ {'Verdict':<8} │ {'Duration':<8}")
-    print("-" * 75)
-    for t in trials:
-        tid = t["trial_id"][:8]
-        print(f"{tid:<10} │ {t['category']:<10} │ {t['task_id']:<15} │ {t['agent_id']:<10} │ {t['verdict']:<8} │ {t['duration_seconds']}s")
+    # Default to beautiful Leaderboard
+    ReportCLI.render_leaderboard(db_path, limit=limit)
     return 0
 
 
@@ -304,6 +311,14 @@ def main() -> None:
 
     if args.list:
         sys.exit(handle_list(args.list, getattr(args, "datasets_dir", "datasets")))
+
+    if args.report or args.board or args.markdown or args.json:
+        sys.exit(handle_report_dispatch(
+            board=args.board,
+            markdown=args.markdown,
+            json_mode=args.json,
+            limit=20,
+        ))
 
     if not args.command:
         parser.print_help()
@@ -340,7 +355,12 @@ def main() -> None:
     elif args.command == "agent":
         sys.exit(handle_list("agent"))
     elif args.command == "report":
-        sys.exit(handle_report(args))
+        sys.exit(handle_report_dispatch(
+            board=getattr(args, "board", True),
+            markdown=getattr(args, "markdown", False),
+            json_mode=getattr(args, "json", False),
+            limit=getattr(args, "limit", 20),
+        ))
     elif args.command == "tui":
         render_tui_dashboard(limit=args.limit)
     elif args.command == "web":

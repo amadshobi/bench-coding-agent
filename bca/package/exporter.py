@@ -41,6 +41,9 @@ class ResultExporter:
             "input_tokens",
             "output_tokens",
             "estimated_cost_usd",
+            "estimated_cost_idr",
+            "quality_score",
+            "critique",
             "created_at",
         ]
 

@@ -46,6 +46,9 @@ class SQLiteStorage:
                     input_tokens INTEGER NOT NULL,
                     output_tokens INTEGER NOT NULL,
                     estimated_cost_usd REAL NOT NULL,
+                    estimated_cost_idr REAL DEFAULT 0.0,
+                    quality_score REAL DEFAULT 0.0,
+                    critique TEXT DEFAULT '',
                     created_at TEXT NOT NULL,
                     extra_data TEXT
                 )
@@ -66,13 +69,15 @@ class SQLiteStorage:
                     verdict, agent_status, agent_exit_code, verifier_exit_code,
                     duration_seconds, agent_duration_seconds, verifier_duration_seconds,
                     turn_count, files_changed, insertions, deletions,
-                    input_tokens, output_tokens, estimated_cost_usd, created_at, extra_data
+                    input_tokens, output_tokens, estimated_cost_usd, estimated_cost_idr,
+                    quality_score, critique, created_at, extra_data
                 ) VALUES (
                     :trial_id, :task_id, :category, :agent_id, :model_id,
                     :verdict, :agent_status, :agent_exit_code, :verifier_exit_code,
                     :duration_seconds, :agent_duration_seconds, :verifier_duration_seconds,
                     :turn_count, :files_changed, :insertions, :deletions,
-                    :input_tokens, :output_tokens, :estimated_cost_usd, :created_at, :extra_data
+                    :input_tokens, :output_tokens, :estimated_cost_usd, :estimated_cost_idr,
+                    :quality_score, :critique, :created_at, :extra_data
                 )
                 """,
                 {

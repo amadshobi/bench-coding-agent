@@ -56,6 +56,18 @@ class TokenUsage:
     output_tokens: int = 0
     total_tokens: int = 0
     estimated_cost_usd: float = 0.0
+    estimated_cost_idr: float = 0.0
+
+
+@dataclass(frozen=True)
+class QualityScore:
+    """Judge Agent quality evaluation scores."""
+    overall_quality: float = 0.0
+    correctness: float = 0.0
+    cleanliness: float = 0.0
+    rule_compliance: float = 0.0
+    efficiency: float = 0.0
+    critique: str = ""
 
 
 @dataclass(frozen=True)
@@ -69,3 +81,4 @@ class ExecutionMetrics:
     tokens: TokenUsage = field(default_factory=TokenUsage)
     diff: DiffStats = field(default_factory=DiffStats)
     wildness: WildnessMetrics = field(default_factory=WildnessMetrics)
+    quality: QualityScore = field(default_factory=QualityScore)

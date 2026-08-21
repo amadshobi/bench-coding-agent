@@ -69,5 +69,8 @@ class TrialResult:
             "input_tokens": self.metrics.tokens.input_tokens,
             "output_tokens": self.metrics.tokens.output_tokens,
             "estimated_cost_usd": self.metrics.tokens.estimated_cost_usd,
+            "estimated_cost_idr": self.metrics.tokens.estimated_cost_idr,
+            "quality_score": self.metrics.quality.overall_quality,
+            "critique": self.metrics.quality.critique,
             "created_at": self.created_at,
         }

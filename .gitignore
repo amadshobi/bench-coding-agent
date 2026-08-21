@@ -1,6 +1,8 @@
-# Local Configurations
+# Local Configurations & Prompts
 config/config.yml
 config/models.yml
+config/agent/*.md
+!config/agent/*.example.md
 *.local.yml
 
 # Environment & Secrets

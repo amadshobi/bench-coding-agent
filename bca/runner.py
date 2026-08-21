@@ -1,4 +1,4 @@
-"""Trial runner and orchestrator pipeline connecting Task, Agent, Sandbox, and Verifier."""
+"""Trial runner and orchestrator pipeline connecting Task, Agent, Sandbox, Verifier, Pricing, and Judge."""
 
 import time
 import uuid
@@ -12,28 +12,34 @@ from bca.core.types import (
     DiffStats,
     TokenUsage,
     WildnessMetrics,
+    QualityScore,
 )
 from bca.core.task import TaskSpec
 from bca.core.trial import TrialResult, AgentResult, VerifierResult
 from bca.agent.base import BaseAgent
 from bca.sandbox import create_sandbox, BaseSandbox, ShadowCloneSandbox
 from bca.dataset.verifier import TaskVerifier
+from bca.llm.pricing import PricingEngine
+from bca.package.judge import AnalyticsJudgeAgent
 
 
 class TrialRunner:
     """
     Orchestrates the lifecycle of a benchmark trial:
-    Setup Sandbox -> Run Agent -> Extract Diff -> Run Verifier -> Teardown -> Record Metrics.
+    Setup Sandbox -> Run Agent -> Extract Diff -> Run Verifier -> Teardown -> Judge -> Pricing -> Record Metrics.
     """
 
     def __init__(
         self,
         sandbox_mode: str = "shadow",
         preserve_sandbox: bool = False,
+        enable_judge: bool = True,
     ):
         self.sandbox_mode = sandbox_mode
         self.preserve_sandbox = preserve_sandbox
+        self.enable_judge = enable_judge
         self.verifier = TaskVerifier()
+        self.judge = AnalyticsJudgeAgent() if enable_judge else None
 
     def run_trial(
         self,
@@ -86,16 +92,52 @@ class TrialRunner:
 
         total_duration = round(time.perf_counter() - total_start, 3)
 
-        # 7. Assemble final metrics & verdict
+        # 7. Evaluate with Analytics Judge Agent
+        quality_score = QualityScore()
+        if self.judge:
+            eval_res = self.judge.evaluate(
+                task=task,
+                agent_result=agent_res,
+                verdict=verifier_res.verdict,
+                patch_diff=diff_stats.patch,
+            )
+            quality_score = QualityScore(
+                overall_quality=eval_res.quality_score,
+                correctness=eval_res.correctness_score,
+                cleanliness=eval_res.cleanliness_score,
+                rule_compliance=eval_res.rule_compliance_score,
+                efficiency=eval_res.efficiency_score,
+                critique=eval_res.critique,
+            )
+
+        # 8. Calculate Real-time Dual-Currency Pricing
+        # Estimate or extract actual tokens from trajectory
+        in_toks = 8000
+        out_toks = 400
+        if agent_res.trajectory and agent_res.trajectory.steps:
+            in_toks = len(agent_res.trajectory.steps) * 3500
+            out_toks = len(agent_res.trajectory.steps) * 250
+
+        cost_usd, cost_idr = PricingEngine.calculate_cost(agent.model_id, in_toks, out_toks)
+        token_usage = TokenUsage(
+            input_tokens=in_toks,
+            output_tokens=out_toks,
+            total_tokens=in_toks + out_toks,
+            estimated_cost_usd=cost_usd,
+            estimated_cost_idr=cost_idr,
+        )
+
+        # 9. Assemble final metrics & verdict
         metrics = ExecutionMetrics(
             duration_seconds=total_duration,
             setup_duration_seconds=round(setup_duration, 3),
             agent_duration_seconds=agent_res.duration_seconds,
             verifier_duration_seconds=verifier_res.duration_seconds,
             turn_count=len(agent_res.trajectory.steps) if agent_res.trajectory else 1,
-            tokens=TokenUsage(),
+            tokens=token_usage,
             diff=diff_stats,
             wildness=wildness_metrics,
+            quality=quality_score,
         )
 
         final_verdict = verifier_res.verdict
