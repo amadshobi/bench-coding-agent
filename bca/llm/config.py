@@ -24,32 +24,49 @@ class BCAConfig:
         return None
 
     @classmethod
-    def _simple_yaml_parse(cls, content: str) -> Dict[str, Dict[str, str]]:
-        """Lightweight zero-dependency YAML parser for key-value nested structures."""
+    def _simple_yaml_parse(cls, content: str) -> Dict[str, Any]:
+        """Lightweight zero-dependency YAML parser for BCA config structures."""
         backends: Dict[str, Dict[str, str]] = {}
+        judge_config: Dict[str, str] = {}
+        current_section = None
         current_backend = None
 
         for line in content.splitlines():
-            # Strip comments & whitespace
             line = line.split("#", 1)[0].rstrip()
-            if not line.strip() or line.strip() == "backends:":
+            if not line.strip():
                 continue
 
-            # Check backend key (indent: 2 spaces, e.g. "  opencode:")
-            b_match = re.match(r"^  ([a-zA-Z0-9_\-]+):", line)
-            if b_match:
-                current_backend = b_match.group(1)
-                backends[current_backend] = {}
+            if line.strip() == "backends:":
+                current_section = "backends"
+                continue
+            elif line.strip() == "judge:":
+                current_section = "judge"
                 continue
 
-            # Check alias: model_id key (indent: 4 spaces, e.g. "    gemini-3.7-flash: omp/gemini-3.7-flash-tiered")
-            m_match = re.match(r"^    ([a-zA-Z0-9_\-\.\:\+]+):\s*[\"']?([^\"'\s]+)[\"']?", line)
-            if m_match and current_backend:
-                alias = m_match.group(1).strip()
-                target_id = m_match.group(2).strip()
-                backends[current_backend][alias] = target_id
+            if current_section == "backends":
+                b_match = re.match(r"^  ([a-zA-Z0-9_\-]+):", line)
+                if b_match:
+                    current_backend = b_match.group(1)
+                    backends[current_backend] = {}
+                    continue
 
-        return backends
+                m_match = re.match(r"^    ([a-zA-Z0-9_\-\.\:\+]+):\s*[\"']?([^\"'\s]+)[\"']?", line)
+                if m_match and current_backend:
+                    alias = m_match.group(1).strip()
+                    target_id = m_match.group(2).strip()
+                    backends[current_backend][alias] = target_id
+
+            elif current_section == "judge":
+                j_match = re.match(r"^  ([a-zA-Z0-9_\-]+):\s*[\"']?([^\"'\s]+)[\"']?", line)
+                if j_match:
+                    k = j_match.group(1).strip()
+                    v = j_match.group(2).strip()
+                    judge_config[k] = v
+
+        return {
+            "backends": backends,
+            "judge": judge_config,
+        }
 
     @classmethod
     def load_backends(cls) -> Dict[str, Dict[str, str]]:
@@ -59,7 +76,21 @@ class BCAConfig:
             return {}
 
         try:
-            return cls._simple_yaml_parse(cfg_path.read_text(encoding="utf-8"))
+            parsed = cls._simple_yaml_parse(cfg_path.read_text(encoding="utf-8"))
+            return parsed.get("backends", {})
+        except Exception:
+            return {}
+
+    @classmethod
+    def load_judge_config(cls) -> Dict[str, str]:
+        """Returns judge configuration dict from config.yml."""
+        cfg_path = cls.find_config_path()
+        if not cfg_path:
+            return {}
+
+        try:
+            parsed = cls._simple_yaml_parse(cfg_path.read_text(encoding="utf-8"))
+            return parsed.get("judge", {})
         except Exception:
             return {}
 

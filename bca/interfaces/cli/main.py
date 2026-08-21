@@ -207,7 +207,8 @@ def handle_execute_trials(
 
             icon = "✅" if trial_res.verdict == Verdict.PASS else "❌"
             diff_str = f"+{trial_res.metrics.diff.insertions}/-{trial_res.metrics.diff.deletions}"
-            print(f"{icon} {trial_res.verdict.value} ({trial_res.metrics.duration_seconds}s, diff: {diff_str})")
+            q_score = trial_res.metrics.quality.overall_quality
+            print(f"{icon} {trial_res.verdict.value} ({trial_res.metrics.duration_seconds}s, diff: {diff_str}) [Judge: ⭐ {q_score:.0f}/100]")
             run_idx += 1
 
     # Export full summary files, rankings, dual currency reports, and markdown context

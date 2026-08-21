@@ -40,3 +40,9 @@ backends:
     minimax-m3: ollama-cloud/minimax-m3
     hy3-free: kilo/tencent/hy3:free
     nemotron-ultra: ollama-cloud/nemotron-3-ultra
+
+judge:
+  backend: gateway
+  model: google-antigravity/gemini-3.7-flash-tiered
+  reasoning_effort: low
+  base_url: http://127.0.0.1:4000/v1

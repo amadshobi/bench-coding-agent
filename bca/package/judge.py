@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from bca.core.task import TaskSpec
 from bca.core.trial import AgentResult
 from bca.core.types import Verdict
+from bca.llm.config import BCAConfig
 
 
 @dataclass
@@ -40,7 +41,8 @@ class JudgeEvaluation:
 class AnalyticsJudgeAgent:
     """
     Autonomous Judge Agent reading prompt from `config/agent/analytics.md`
-    and executing direct evaluation via local gateway or custom endpoint.
+    and configuration from `config/config.yml` (section `judge:`).
+    Supports ANY model with flexible reasoning_effort parameter handling.
     """
 
     DEFAULT_PROMPT = """You are an expert Principal Software Engineer and AI Benchmark Evaluator.
@@ -71,10 +73,13 @@ Return ONLY a valid JSON object matching:
         base_url: Optional[str] = None,
         model_id: Optional[str] = None,
         api_key: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ):
-        self.base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or "http://127.0.0.1:4000/v1").rstrip("/")
-        self.model_id = model_id or "google-antigravity/gemini-3.7-flash-tiered"
+        cfg = BCAConfig.load_judge_config()
+        self.base_url = (base_url or cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL") or "http://127.0.0.1:4000/v1").rstrip("/")
+        self.model_id = model_id or cfg.get("model") or "google-antigravity/gemini-3.7-flash-tiered"
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or "dummy"
+        self.reasoning_effort = reasoning_effort or cfg.get("reasoning_effort") or "low"
 
     def _load_system_prompt(self) -> str:
         """Loads prompt from config/agent/analytics.md or fallback to analytics.example.md."""
@@ -133,15 +138,17 @@ Outcome: {verdict.value}
 Please evaluate this solution now according to your grading criteria and output strict JSON."""
 
         try:
-            payload = {
+            payload: Dict[str, Any] = {
                 "model": self.model_id,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                "temperature": 0.1,
-                "response_format": {"type": "json_object"} if "openai" in self.base_url else None,
             }
+
+            # If model supports or requires reasoning effort (e.g. Gemini 3.7 / reasoning models)
+            if self.reasoning_effort:
+                payload["reasoning_effort"] = self.reasoning_effort
 
             req = urllib.request.Request(
                 f"{self.base_url}/chat/completions",
