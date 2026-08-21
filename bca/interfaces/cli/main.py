@@ -238,7 +238,8 @@ def handle_execute_trials(
         agent = get_agent(agent_id=canonical_backend, model_id=resolved_model)
         for task in target_tasks:
             model_tag = alias if alias != "default" else "default"
-            tracker_prefix = f"[{run_idx}/{total_runs}] [{canonical_backend}] [{model_tag}] task: {task.name}"
+            short_task_name = task.name.split("/")[-1]
+            tracker_prefix = f"[{run_idx}/{total_runs}] [{canonical_backend}] [{model_tag}] {short_task_name}"
             trial_res = runner.run_trial(task, agent, tracker_prefix=tracker_prefix)
             results.append(trial_res)
             storage.save_trial(trial_res)
@@ -246,7 +247,7 @@ def handle_execute_trials(
             icon = "✅" if trial_res.verdict == Verdict.PASS else "❌"
             diff_str = f"+{trial_res.metrics.diff.insertions}/-{trial_res.metrics.diff.deletions}"
             q_score = trial_res.metrics.quality.overall_quality
-            print(f"{tracker_prefix} ... {icon} {trial_res.verdict.value} ({trial_res.metrics.duration_seconds}s, diff: {diff_str}) [Judge: ⭐ {q_score:.0f}/100]")
+            print(f"[{run_idx}/{total_runs}] [{canonical_backend}] [{model_tag}] {short_task_name} ... {icon} {trial_res.verdict.value} ({trial_res.metrics.duration_seconds}s, diff: {diff_str}) [Judge: ⭐ {q_score:.0f}/100]")
             run_idx += 1
 
     # Export full summary files, rankings, dual currency reports, and markdown context
