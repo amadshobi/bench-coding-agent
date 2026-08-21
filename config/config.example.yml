@@ -1,0 +1,42 @@
+# config/config.example.yml — BCA Synchronized Model Catalog & Aliases Template
+# Copy this file to config/config.yml to customize your local mappings.
+
+backends:
+  opencode:
+    gemini-3.7-flash: omp/gemini-3.7-flash-tiered
+    gemini-3.6-flash: omp/gemini-3.6-flash
+    gemini-3.1-pro: omp/gemini-3.1-pro
+    claude-sonnet-4-6: omp/claude-sonnet-4-6
+    claude-opus-4-6: omp/claude-opus-4-6
+    deepseek-v4-flash: omp/deepseek-v4-flash
+    minimax-m3: omp/minimax-m3
+    hy3: omp/hy3
+
+  commandcode:
+    gemini-3.7-flash: google/gemini-3.7-flash
+    gemini-3.6-flash: google/gemini-3.6-flash
+    claude-sonnet-4-6: claude-sonnet-4-6
+    claude-opus-4-6: claude-opus-4-6
+    deepseek-v4-flash: deepseek/deepseek-v4-flash
+    deepseek-v4-pro: deepseek/deepseek-v4-pro
+    kimi-k3: moonshotai/kimi-k3
+    kimi-k2.7-code: moonshotai/kimi-k2.7-code
+    minimax-m3: minimaxai/minimax-m3
+    hy3: tencent/hy3-paid
+
+  omp:
+    hy3-free: kilo/tencent/hy3:free
+    gpt-5.6-luna: openrouter/openai/gpt-5.6-luna
+    deepseek-v4-flash: charm-hyper/deepseek-v4-flash
+    kilo-small: kilo/kilo-auto/small
+    nemotron-ultra: kilo/nvidia/nemotron-3-ultra-550b-a55b:free
+
+  gateway:
+    gemini-3.7-flash-tiered: google-antigravity/gemini-3.7-flash-tiered
+    gemini-3.6-flash: google-antigravity/gemini-3.6-flash
+    gemini-3.1-pro: google-antigravity/gemini-3.1-pro
+    claude-sonnet-4-6: google-antigravity/claude-sonnet-4-6
+    claude-opus-4-6: google-antigravity/claude-opus-4-6
+    minimax-m3: ollama-cloud/minimax-m3
+    hy3-free: kilo/tencent/hy3:free
+    nemotron-ultra: ollama-cloud/nemotron-3-ultra

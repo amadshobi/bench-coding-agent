@@ -11,7 +11,7 @@ from bca.core.trajectory import Trajectory, TrajectoryStep, ToolCall, Observatio
 class OpenCodeAgent(BaseAgent):
     """
     Drives the `opencode` CLI agent inside the sandbox environment.
-    Runs non-interactive headless mode via `opencode run "<instruction>"`.
+    Runs non-interactive headless mode via `opencode run "<instruction>" --auto`.
     """
 
     def __init__(
@@ -20,7 +20,9 @@ class OpenCodeAgent(BaseAgent):
         model_id: Optional[str] = None,
         extra_env: Optional[Dict[str, str]] = None,
         flags: Optional[List[str]] = None,
-        format_json: bool = False,
+        format_json: bool = True,
+        auto_approve: bool = True,
+        pure: bool = True,
     ):
         super().__init__(
             agent_id=agent_id,
@@ -29,15 +31,23 @@ class OpenCodeAgent(BaseAgent):
             flags=flags or [],
         )
         self.format_json = format_json
+        self.auto_approve = auto_approve
+        self.pure = pure
 
     def build_command(self, instruction: str) -> str:
         parts = ["opencode", "run"]
 
-        if self.model_id:
-            parts.extend(["--model", shlex.quote(self.model_id)])
+        if self.auto_approve:
+            parts.append("--auto")
+
+        if self.pure:
+            parts.append("--pure")
 
         if self.format_json:
             parts.append("--format=json")
+
+        if self.model_id:
+            parts.extend(["--model", shlex.quote(self.model_id)])
 
         for flag in self.flags:
             parts.append(flag)

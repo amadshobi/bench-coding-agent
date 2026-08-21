@@ -1,3 +1,8 @@
+# Local Configurations
+config/config.yml
+config/models.yml
+*.local.yml
+
 # Environment & Secrets
 .env
 .env.*

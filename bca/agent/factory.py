@@ -5,14 +5,23 @@ from typing import Any, Dict, List, Optional
 from bca.agent.base import BaseAgent
 from bca.agent.opencode import OpenCodeAgent
 from bca.agent.commandcode import CommandCodeAgent
-from bca.agent.antigravity import AntigravityAgent
+from bca.agent.omp import OMPAgent
+from bca.agent.direct_gateway import DirectGatewayAgent
 from bca.agent.generic_cli import GenericCLIAgent
 
 
 AGENT_REGISTRY = {
     "opencode": OpenCodeAgent,
     "commandcode": CommandCodeAgent,
-    "antigravity": AntigravityAgent,
+    "omp": OMPAgent,
+    "gateway": DirectGatewayAgent,
+}
+
+AGENT_ALIASES = {
+    "cmd": "commandcode",
+    "oh-my-pi": "omp",
+    "direct": "gateway",
+    "openai": "gateway",
 }
 
 
@@ -26,6 +35,7 @@ def get_agent(
 ) -> BaseAgent:
     """Instantiate a coding agent by ID or custom template."""
     normalized_id = agent_id.lower().strip()
+    normalized_id = AGENT_ALIASES.get(normalized_id, normalized_id)
 
     if normalized_id in AGENT_REGISTRY:
         cls = AGENT_REGISTRY[normalized_id]

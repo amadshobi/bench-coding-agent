@@ -122,6 +122,22 @@ class TestBCACore(unittest.TestCase):
         self.assertIn("Leaderboard", md_file.read_text())
         self.assertIn("Task Context", ctx_file.read_text())
 
+    def test_agent_factory_matrix(self):
+        opencode = get_agent("opencode")
+        self.assertEqual(opencode.agent_id, "opencode")
+
+        cmd = get_agent("cmd")
+        self.assertEqual(cmd.agent_id, "commandcode")
+
+        omp = get_agent("omp")
+        self.assertEqual(omp.agent_id, "omp")
+
+        gateway = get_agent("gateway")
+        self.assertEqual(gateway.agent_id, "gateway")
+
+        openai = get_agent("openai")
+        self.assertEqual(openai.agent_id, "gateway")
+
 
 if __name__ == "__main__":
     unittest.main()

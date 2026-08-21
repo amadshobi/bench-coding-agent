@@ -1,7 +1,9 @@
 """LLM provider registry and helper specs."""
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+
+from bca.llm.discovery import ModelDiscovery
 
 
 @dataclass(frozen=True)
@@ -19,7 +21,7 @@ class ModelMetadata:
 
 
 class ModelRegistry:
-    """Registry of known AI models, token pricing, and context limits."""
+    """Registry of known AI models, token pricing, context limits, and dynamic discovery."""
 
     _MODELS: Dict[str, ModelMetadata] = {
         "anthropic/claude-3.7-sonnet": ModelMetadata(
@@ -39,3 +41,20 @@ class ModelRegistry:
     @classmethod
     def get_model(cls, model_id: str) -> Optional[ModelMetadata]:
         return cls._MODELS.get(model_id)
+
+    @classmethod
+    def list_available_models(cls, backend: Optional[str] = None) -> Dict[str, List[Dict[str, str]]]:
+        """Returns auto-discovered models filtered by backend or all."""
+        all_models = ModelDiscovery.discover_all()
+        if backend:
+            normalized = backend.lower().strip()
+            if normalized in ("cmd", "commandcode"):
+                return {"commandcode": all_models.get("commandcode", [])}
+            elif normalized in ("omp", "oh-my-pi"):
+                return {"omp": all_models.get("omp", [])}
+            elif normalized in ("gateway", "omp-gateway", "direct", "openai"):
+                return {"omp-gateway": all_models.get("omp-gateway", [])}
+            elif normalized in ("opencode",):
+                return {"opencode": all_models.get("opencode", [])}
+            return {normalized: all_models.get(normalized, [])}
+        return all_models
