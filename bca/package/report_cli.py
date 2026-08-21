@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from bca.storage.sqlite import SQLiteStorage
+from bca.package.terminal_renderer import render_terminal_markdown
+from bca.package.ui import TerminalUI
 
 
 class ReportCLI:
@@ -63,8 +65,6 @@ class ReportCLI:
             cost_score = max(0.0, 100.0 - (avg_cost_idr / 50.0))
             overall = (pass_rate * 0.50) + (avg_quality * 0.25) + (speed_score * 0.15) + (cost_score * 0.10)
 
-            latest_critique = d["critiques"][-1] if d["critiques"] else "No judge critique available."
-
             rank_list.append({
                 "agent": d["agent"],
                 "model": d["model"],
@@ -75,25 +75,34 @@ class ReportCLI:
                 "quality": round(avg_quality, 1),
                 "avg_time": round(avg_time, 2),
                 "avg_cost_idr": round(avg_cost_idr, 1),
-                "critique": latest_critique,
             })
 
         # Sort by Overall Score descending
         rank_list.sort(key=lambda x: x["overall"], reverse=True)
 
-        print("\n🏆 BCA BENCHMARK LEADERBOARD (4-DIMENSIONS EVAL)")
-        print("=" * 88)
-        print(f"{'Rank':<5} │ {'Agent':<6} │ {'Target Model':<28} │ {'Overall':<8} │ {'Pass Rate':<11} │ {'Quality':<7} │ {'Time':<6} │ {'Cost (IDR)'}")
-        print("-" * 88)
+        headers = ["Rank", "Agent", "Target Model", "Overall", "Pass Rate", "Quality", "Avg Time", "Cost (IDR)"]
+        alignments = ["center", "left", "left", "right", "left", "right", "right", "right"]
+        rows = []
 
         for idx, r in enumerate(rank_list[:limit], start=1):
             m_name = r['model'].split('/')[-1] if '/' in r['model'] else r['model']
-            pass_str = f"{r['pass_rate_pct']}% ({r['passed']}/{r['total']})"
-            cost_str = f"Rp {r['avg_cost_idr']:,.0f}" if r['avg_cost_idr'] > 0 else "Free"
-            print(f" #{idx:<3} │ {r['agent']:<6} │ {m_name[:28]:<28} │ {r['overall']:>5.1f}/100 │ {pass_str:<11} │ {r['quality']:>5.1f}   │ {r['avg_time']:>4.1f}s │ {cost_str}")
+            pass_badge = f"\x1b[32m{r['pass_rate_pct']}%\x1b[0m ({r['passed']}/{r['total']})" if r['pass_rate_pct'] == 100 else f"\x1b[31m{r['pass_rate_pct']}%\x1b[0m ({r['passed']}/{r['total']})"
+            cost_str = f"Rp {r['avg_cost_idr']:,.0f}" if r['avg_cost_idr'] > 0 else "\x1b[32mFree\x1b[0m"
+            rank_badge = f"\x1b[1;33m#{idx}\x1b[0m" if idx == 1 else f"#{idx}"
 
-        print("=" * 88)
-        print("💡 Scoring: 50% Pass Rate + 25% Judge Quality + 15% Speed + 10% Cost Efficiency\n")
+            rows.append([
+                rank_badge,
+                f"\x1b[36m{r['agent']}\x1b[0m",
+                f"\x1b[1;37m{m_name[:26]}\x1b[0m",
+                f"\x1b[1;33m{r['overall']:>5.1f}\x1b[0m/100",
+                pass_badge,
+                f"⭐ {r['quality']:>4.1f}",
+                f"{r['avg_time']:>4.1f}s",
+                cost_str,
+            ])
+
+        print("\n" + TerminalUI.render_table(headers, rows, alignments=alignments, title="🏆 BCA BENCHMARK LEADERBOARD (4-DIMENSIONS EVAL)"))
+        print("\x1b[90m💡 Formula: 50% Pass Rate + 25% Judge Quality + 15% Speed + 10% Cost Efficiency\x1b[0m\n")
 
     @classmethod
     def render_markdown(cls, results_dir: Path) -> None:
@@ -103,11 +112,9 @@ class ReportCLI:
             print(f"ℹ️ No summary report found at '{md_file}'. Run a benchmark first.")
             return
 
-        print("\n" + "═" * 70)
-        print(" 📄 BCA BENCHMARK SUMMARY REPORT (results/results.md)")
-        print("═" * 70 + "\n")
-        print(md_file.read_text(encoding="utf-8"))
-        print("═" * 70 + "\n")
+        raw_content = md_file.read_text(encoding="utf-8")
+        rendered = render_terminal_markdown(raw_content)
+        print("\n" + rendered + "\n")
 
     @classmethod
     def render_json(cls, db_path: Path, limit: int = 100) -> None:

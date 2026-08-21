@@ -13,6 +13,7 @@ from bca.runner import TrialRunner
 from bca.storage import SQLiteStorage
 from bca.package import ResultExporter, BenchmarkSummarizer, ContextExporter
 from bca.package.report_cli import ReportCLI
+from bca.package.ui import TerminalUI
 from bca.core.types import Verdict
 from bca.interfaces.tui import render_tui_dashboard
 from bca.interfaces.web import run_web_server
@@ -58,10 +59,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--preserve", action="store_true", help="Keep sandbox directory for inspection")
     parser.add_argument("--datasets-dir", default="datasets", help="Path to benchmark tasks directory")
 
-    subparsers = parser.add_subparsers(dest="command", help="Subcommands / Backends")
+    subparsers = parser.add_subparsers(dest="command", help="Benchmark Runners & Tools")
 
-    # `bca run`
-    run_p = subparsers.add_parser("run", help="Execute benchmark trials")
+    # 4 Canonical Backend Subcommands with clean descriptions & aliases
+    backend_specs = [
+        ("oc", ["opencode"], "Run benchmark with OpenCode CLI agent"),
+        ("cmd", ["commandcode"], "Run benchmark with CommandCode CLI agent"),
+        ("omp", ["oh-my-pi"], "Run benchmark with Oh My Pi (omp) CLI agent"),
+        ("gw", ["gateway", "omp-g"], "Run benchmark with Direct OpenAI-compatible Gateway (127.0.0.1:4000/v1)"),
+    ]
+
+    for primary, aliases, desc in backend_specs:
+        bp = subparsers.add_parser(primary, aliases=aliases, help=desc)
+        bp.add_argument("-m", "--model", help="Target model ID or comma-separated list (e.g. gemini-3.7-flash)")
+        bp.add_argument("-t", "--task", help="Target task index or ID (e.g. 1, 1,2, all)")
+        bp.add_argument("-c", "--category", help="Filter tasks by category")
+        bp.add_argument("--sandbox", choices=["shadow", "local", "docker"], default="shadow", help="Sandbox isolation mode")
+        bp.add_argument("--preserve", action="store_true", help="Keep sandbox directory")
+        bp.add_argument("--datasets-dir", default="datasets", help="Path to benchmark tasks directory")
+
+    # `bca run` (Generic entrypoint)
+    run_p = subparsers.add_parser("run", help="Execute benchmark trials (generic)")
     run_p.add_argument("-a", "--agent", required=True, help="Agent adapter (oc, cmd, omp, gw)")
     run_p.add_argument("-m", "--model", help="Target model ID or comma-separated list")
     run_p.add_argument("-t", "--task", help="Task ID or number")
@@ -69,16 +87,6 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--sandbox", choices=["shadow", "local", "docker"], default="shadow", help="Sandbox isolation mode")
     run_p.add_argument("--preserve", action="store_true", help="Keep sandbox directory")
     run_p.add_argument("--datasets-dir", default="datasets", help="Path to benchmark tasks directory")
-
-    # Shorthand backends directly as subcommands: `bca oc`, `bca cmd`, `bca omp`, `bca gw`
-    for b_alias in ("oc", "opencode", "cmd", "commandcode", "omp", "pi", "gw", "gateway", "omp-g"):
-        bp = subparsers.add_parser(b_alias, help=f"Run benchmark with {b_alias} backend")
-        bp.add_argument("-m", "--model", help="Target model ID or comma-separated list (e.g. gemini-3.7-flash)")
-        bp.add_argument("-t", "--task", help="Target task index or ID (e.g. 1, 1,2, all)")
-        bp.add_argument("-c", "--category", help="Filter tasks by category")
-        bp.add_argument("--sandbox", choices=["shadow", "local", "docker"], default="shadow", help="Sandbox isolation mode")
-        bp.add_argument("--preserve", action="store_true", help="Keep sandbox directory")
-        bp.add_argument("--datasets-dir", default="datasets", help="Path to benchmark tasks directory")
 
     # `bca model`
     model_p = subparsers.add_parser("model", help="Inspect and list synchronized available models")
@@ -200,15 +208,15 @@ def handle_execute_trials(
         agent = get_agent(agent_id=canonical_backend, model_id=resolved_model)
         for task in target_tasks:
             model_tag = alias if alias != "default" else "default"
-            print(f"[{run_idx}/{total_runs}] [{canonical_backend}] [{model_tag}] task: {task.name} ... ", end="", flush=True)
-            trial_res = runner.run_trial(task, agent)
+            tracker_prefix = f"[{run_idx}/{total_runs}] [{canonical_backend}] [{model_tag}] task: {task.name}"
+            trial_res = runner.run_trial(task, agent, tracker_prefix=tracker_prefix)
             results.append(trial_res)
             storage.save_trial(trial_res)
 
             icon = "✅" if trial_res.verdict == Verdict.PASS else "❌"
             diff_str = f"+{trial_res.metrics.diff.insertions}/-{trial_res.metrics.diff.deletions}"
             q_score = trial_res.metrics.quality.overall_quality
-            print(f"{icon} {trial_res.verdict.value} ({trial_res.metrics.duration_seconds}s, diff: {diff_str}) [Judge: ⭐ {q_score:.0f}/100]")
+            print(f"{tracker_prefix} ... {icon} {trial_res.verdict.value} ({trial_res.metrics.duration_seconds}s, diff: {diff_str}) [Judge: ⭐ {q_score:.0f}/100]")
             run_idx += 1
 
     # Export full summary files, rankings, dual currency reports, and markdown context
@@ -230,13 +238,13 @@ def handle_list(list_type: str, datasets_dir_str: str = "datasets") -> int:
     if lt in ("task", "tasks", "t"):
         loader = DatasetLoader(Path(datasets_dir_str).resolve())
         tasks = loader.list_tasks()
-        print(f"\n📋 Available BCA Benchmark Tasks ({len(tasks)}):")
-        print("=" * 65)
-        print(f"{'#':<4} │ {'Category':<10} │ {'Task ID':<30} │ {'Title'}")
-        print("-" * 65)
-        for idx, t in enumerate(tasks, start=1):
-            print(f"[{idx}]  │ {t.category:<10} │ {t.task_id:<30} │ {t.title}")
-        print("\nTip: Run with `bca <backend> -t 1` or `bca <backend> -t 1,2`.")
+        headers = ["#", "Category", "Task ID", "Title"]
+        rows = [
+            [f"\x1b[33m[{idx}]\x1b[0m", f"\x1b[36m{t.category}\x1b[0m", f"\x1b[1;37m{t.task_id}\x1b[0m", t.title]
+            for idx, t in enumerate(tasks, start=1)
+        ]
+        print("\n" + TerminalUI.render_table(headers, rows, title=f"📋 Available BCA Benchmark Tasks ({len(tasks)})"))
+        print("\x1b[90mTip: Run with `bca <backend> -t 1` or `bca <backend> -t 1,2`.\x1b[0m\n")
         return 0
 
     if lt in ("model", "models", "m"):
@@ -244,48 +252,53 @@ def handle_list(list_type: str, datasets_dir_str: str = "datasets") -> int:
         if not cfg_models:
             cfg_models = ModelRegistry.list_available_models()
 
-        print("\n🔮 Configured Model Catalog & Aliases (config/config.yml):")
-        print("=" * 75)
+        print()
         for b_name, m_map in cfg_models.items():
-            print(f"\n📦 [{b_name.upper()}] ({len(m_map)} model aliases):")
-            print("-" * 75)
-            print(f"  {'Alias (Shorthand)':<28} │ {'Target Model ID'}")
-            print("-" * 75)
+            headers = ["Alias (Shorthand)", "Target Model ID"]
+            rows = []
             if isinstance(m_map, dict):
                 for alias, target in m_map.items():
-                    print(f"  {alias:<28} │ {target}")
+                    rows.append([f"\x1b[1;33m{alias}\x1b[0m", f"\x1b[37m{target}\x1b[0m"])
             elif isinstance(m_map, list):
                 for item in m_map:
-                    print(f"  {item.get('id', ''):<28} │ {item.get('name', '')}")
-        print("\nTip: Run with `bca <backend> -m <alias>` (e.g. `bca oc -m gemini-3.7-flash -t 1`).")
+                    rows.append([f"\x1b[1;33m{item.get('id', '')}\x1b[0m", f"\x1b[37m{item.get('name', '')}\x1b[0m"])
+
+            print(TerminalUI.render_table(headers, rows, title=f"📦 [{b_name.upper()}] ({len(rows)} models)"))
+            print()
+
+        print("\x1b[90mTip: Run with `bca <backend> -m <alias>` (e.g. `bca oc -m gemini-3.7-flash -t 1`).\x1b[0m\n")
         return 0
 
     if lt in ("agent", "agents", "a"):
-        print("\n🤖 Supported BCA Backends & Aliases:")
-        print("=" * 55)
-        print(f"  {'Alias / Command':<18} │ {'Engine Type'}")
-        print("-" * 55)
-        print(f"  {'oc, opencode':<18} │ Full CLI Coding Agent")
-        print(f"  {'cmd, commandcode':<18} │ Full CLI Coding Agent")
-        print(f"  {'omp, pi':<18} │ Full CLI Coding Agent")
-        print(f"  {'gw, gateway':<18} │ Direct API (OpenAI-compatible)")
+        headers = ["Alias / Command", "Engine Type", "Description"]
+        rows = [
+            ["\x1b[1;33moc, opencode\x1b[0m", "\x1b[36mFull CLI Agent\x1b[0m", "Drives opencode run with auto-approval & JSON format"],
+            ["\x1b[1;33mcmd, commandcode\x1b[0m", "\x1b[36mFull CLI Agent\x1b[0m", "Drives cmd/commandcode non-interactive headless mode"],
+            ["\x1b[1;33momp, pi\x1b[0m", "\x1b[36mFull CLI Agent\x1b[0m", "Drives Oh My Pi CLI agent in autonomous mode"],
+            ["\x1b[1;33mgw, gateway\x1b[0m", "\x1b[32mDirect API\x1b[0m", "Direct OpenAI-compatible loop (127.0.0.1:4000/v1)"],
+        ]
+        print("\n" + TerminalUI.render_table(headers, rows, title="🤖 Supported BCA Backends & Aliases") + "\n")
         return 0
 
-    # Default: summary
-    print("\n🏗️ BCA (Bench Coding Agent) — Quick Overview")
-    print("=" * 55)
+    # Default: summary overview card
     loader = DatasetLoader(Path(datasets_dir_str).resolve())
     tasks = loader.list_tasks()
     cfg_models = BCAConfig.load_backends()
+    total_aliases = sum(len(v) for v in cfg_models.values()) if cfg_models else "dynamic"
 
-    print(f"• Backends Available : oc, cmd, omp, gw (4 pillars)")
-    print(f"• Configured Tasks   : {len(tasks)} tasks ready")
-    print(f"• Configured Aliases : {sum(len(v) for v in cfg_models.values()) if cfg_models else 'dynamic'} aliases in config/config.yml")
-    print("\nQuick Commands:")
-    print("  bca -l task              # List all tasks with index numbers")
-    print("  bca -l model             # List model aliases")
-    print("  bca oc -m gemini-3.7-flash -t 1")
-    print("  bca gw -m gemini-3.7-flash-tiered,claude-sonnet-4-6 -t 1")
+    items = [
+        ("Backends Available", "oc, cmd, omp, gw (4 pillars)"),
+        ("Configured Tasks", f"{len(tasks)} benchmark tasks ready"),
+        ("Configured Aliases", f"{total_aliases} aliases in config/config.yml"),
+        ("Active Sandbox", "Shadow Clone Sandbox (bwrap CoW)"),
+        ("Judge Model", "google-antigravity/gemini-3.7-flash-tiered"),
+    ]
+    print("\n" + TerminalUI.render_card("🏗️  BCA (Bench Coding Agent) — Overview", items, width=68))
+    print("\n\x1b[90mQuick Commands:\x1b[0m")
+    print("  \x1b[1;33mbca -l task\x1b[0m              # List all tasks with index numbers")
+    print("  \x1b[1;33mbca -l model\x1b[0m             # List model aliases per backend")
+    print("  \x1b[1;33mbca oc -m gemini-3.7-flash -t 1\x1b[0m")
+    print("  \x1b[1;33mbca -r -b\x1b[0m                # View 4-dimension leaderboard\n")
     return 0
 
 

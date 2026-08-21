@@ -21,6 +21,7 @@ from bca.sandbox import create_sandbox, BaseSandbox, ShadowCloneSandbox
 from bca.dataset.verifier import TaskVerifier
 from bca.llm.pricing import PricingEngine
 from bca.package.judge import AnalyticsJudgeAgent
+from bca.package.progress import LiveProgressTracker
 
 
 class TrialRunner:
@@ -34,10 +35,12 @@ class TrialRunner:
         sandbox_mode: str = "shadow",
         preserve_sandbox: bool = False,
         enable_judge: bool = True,
+        progress_prefix: str = "",
     ):
         self.sandbox_mode = sandbox_mode
         self.preserve_sandbox = preserve_sandbox
         self.enable_judge = enable_judge
+        self.progress_prefix = progress_prefix
         self.verifier = TaskVerifier()
         self.judge = AnalyticsJudgeAgent() if enable_judge else None
 
@@ -46,113 +49,126 @@ class TrialRunner:
         task: TaskSpec,
         agent: BaseAgent,
         trial_id: Optional[str] = None,
+        tracker_prefix: Optional[str] = None,
     ) -> TrialResult:
-        """Executes a single end-to-end trial."""
+        """Executes a single end-to-end trial with live stage telemetry."""
         trial_id = trial_id or str(uuid.uuid4())
         total_start = time.perf_counter()
 
-        # 1. Spin up isolated sandbox (Default: Shadow Clone)
-        sandbox: BaseSandbox = create_sandbox(
-            mode=self.sandbox_mode,
-            trial_id=trial_id,
-            preserve_on_exit=self.preserve_sandbox,
-        )
+        prefix = tracker_prefix or self.progress_prefix or f"[{agent.agent_id}] task: {task.name}"
+        tracker = LiveProgressTracker(prefix=prefix)
+        tracker.start(f"🛡️  Provisioning Sandbox ({self.sandbox_mode} mode)...")
 
-        setup_start = time.perf_counter()
-        sandbox.setup(starter_dir=task.workspace_dir)
-        setup_duration = time.perf_counter() - setup_start
+        try:
+            # 1. Spin up isolated sandbox (Default: Shadow Clone)
+            sandbox: BaseSandbox = create_sandbox(
+                mode=self.sandbox_mode,
+                trial_id=trial_id,
+                preserve_on_exit=self.preserve_sandbox,
+            )
 
-        # 2. Setup Agent in Sandbox
-        agent.setup(sandbox)
+            setup_start = time.perf_counter()
+            sandbox.setup(starter_dir=task.workspace_dir)
+            setup_duration = time.perf_counter() - setup_start
 
-        # 3. Run Agent with instruction
-        timeout = task.requirements.timeout_seconds
-        agent_res: AgentResult = agent.run(
-            instruction=task.instruction,
-            sandbox=sandbox,
-            timeout_seconds=timeout,
-        )
+            # 2. Setup Agent in Sandbox
+            tracker.update_stage(f"🤖 Initializing {agent.agent_id} in sandbox...")
+            agent.setup(sandbox)
 
-        # 4. Extract Git Diff & Wildness Metrics
-        diff_stats: DiffStats = sandbox.get_diff()
-        wildness_metrics = (
-            sandbox.get_wildness_metrics()
-            if isinstance(sandbox, ShadowCloneSandbox)
-            else WildnessMetrics()
-        )
+            # 3. Run Agent with instruction
+            tracker.update_stage(f"🤖 Coding & Reasoning (autonomous tool loop)...")
+            timeout = task.requirements.timeout_seconds
+            agent_res: AgentResult = agent.run(
+                instruction=task.instruction,
+                sandbox=sandbox,
+                timeout_seconds=timeout,
+            )
 
-        # 5. Run Verifier to determine empirical correctness
-        verifier_res: VerifierResult = self.verifier.verify(
-            verifier_script=task.verifier_script,
-            sandbox=sandbox,
-        )
+            # 4. Extract Git Diff & Wildness Metrics
+            diff_stats: DiffStats = sandbox.get_diff()
+            wildness_metrics = (
+                sandbox.get_wildness_metrics()
+                if isinstance(sandbox, ShadowCloneSandbox)
+                else WildnessMetrics()
+            )
 
-        # 6. Teardown Sandbox
-        sandbox.cleanup()
+            # 5. Run Verifier to determine empirical correctness
+            tracker.update_stage(f"🧪 Running Deterministic Test Verifier...")
+            verifier_res: VerifierResult = self.verifier.verify(
+                verifier_script=task.verifier_script,
+                sandbox=sandbox,
+            )
 
-        total_duration = round(time.perf_counter() - total_start, 3)
+            # 6. Teardown Sandbox
+            tracker.update_stage(f"🧹 Teardown Sandbox...")
+            sandbox.cleanup()
 
-        # 7. Evaluate with Analytics Judge Agent
-        quality_score = QualityScore()
-        if self.judge:
-            eval_res = self.judge.evaluate(
-                task=task,
+            total_duration = round(time.perf_counter() - total_start, 3)
+
+            # 7. Evaluate with Analytics Judge Agent
+            quality_score = QualityScore()
+            if self.judge:
+                judge_m = getattr(self.judge, "model_id", "gateway").split("/")[-1]
+                tracker.update_stage(f"🧐 Analytics Judge ({judge_m}) evaluating quality...")
+                eval_res = self.judge.evaluate(
+                    task=task,
+                    agent_result=agent_res,
+                    verdict=verifier_res.verdict,
+                    patch_diff=diff_stats.patch,
+                )
+                quality_score = QualityScore(
+                    overall_quality=eval_res.quality_score,
+                    correctness=eval_res.correctness_score,
+                    cleanliness=eval_res.cleanliness_score,
+                    rule_compliance=eval_res.rule_compliance_score,
+                    efficiency=eval_res.efficiency_score,
+                    critique=eval_res.critique,
+                )
+
+            # 8. Calculate Real-time Dual-Currency Pricing
+            in_toks = 8000
+            out_toks = 400
+            if agent_res.trajectory and agent_res.trajectory.steps:
+                in_toks = len(agent_res.trajectory.steps) * 3500
+                out_toks = len(agent_res.trajectory.steps) * 250
+
+            cost_usd, cost_idr = PricingEngine.calculate_cost(agent.model_id, in_toks, out_toks)
+            token_usage = TokenUsage(
+                input_tokens=in_toks,
+                output_tokens=out_toks,
+                total_tokens=in_toks + out_toks,
+                estimated_cost_usd=cost_usd,
+                estimated_cost_idr=cost_idr,
+            )
+
+            # 9. Assemble final metrics & verdict
+            metrics = ExecutionMetrics(
+                duration_seconds=total_duration,
+                setup_duration_seconds=round(setup_duration, 3),
+                agent_duration_seconds=agent_res.duration_seconds,
+                verifier_duration_seconds=verifier_res.duration_seconds,
+                turn_count=len(agent_res.trajectory.steps) if agent_res.trajectory else 1,
+                tokens=token_usage,
+                diff=diff_stats,
+                wildness=wildness_metrics,
+                quality=quality_score,
+            )
+
+            final_verdict = verifier_res.verdict
+
+            return TrialResult(
+                trial_id=trial_id,
+                task_id=task.task_id,
+                category=task.category,
+                agent_id=agent.agent_id,
+                model_id=agent.model_id,
+                verdict=final_verdict,
                 agent_result=agent_res,
-                verdict=verifier_res.verdict,
-                patch_diff=diff_stats.patch,
+                verifier_result=verifier_res,
+                metrics=metrics,
             )
-            quality_score = QualityScore(
-                overall_quality=eval_res.quality_score,
-                correctness=eval_res.correctness_score,
-                cleanliness=eval_res.cleanliness_score,
-                rule_compliance=eval_res.rule_compliance_score,
-                efficiency=eval_res.efficiency_score,
-                critique=eval_res.critique,
-            )
-
-        # 8. Calculate Real-time Dual-Currency Pricing
-        # Estimate or extract actual tokens from trajectory
-        in_toks = 8000
-        out_toks = 400
-        if agent_res.trajectory and agent_res.trajectory.steps:
-            in_toks = len(agent_res.trajectory.steps) * 3500
-            out_toks = len(agent_res.trajectory.steps) * 250
-
-        cost_usd, cost_idr = PricingEngine.calculate_cost(agent.model_id, in_toks, out_toks)
-        token_usage = TokenUsage(
-            input_tokens=in_toks,
-            output_tokens=out_toks,
-            total_tokens=in_toks + out_toks,
-            estimated_cost_usd=cost_usd,
-            estimated_cost_idr=cost_idr,
-        )
-
-        # 9. Assemble final metrics & verdict
-        metrics = ExecutionMetrics(
-            duration_seconds=total_duration,
-            setup_duration_seconds=round(setup_duration, 3),
-            agent_duration_seconds=agent_res.duration_seconds,
-            verifier_duration_seconds=verifier_res.duration_seconds,
-            turn_count=len(agent_res.trajectory.steps) if agent_res.trajectory else 1,
-            tokens=token_usage,
-            diff=diff_stats,
-            wildness=wildness_metrics,
-            quality=quality_score,
-        )
-
-        final_verdict = verifier_res.verdict
-
-        return TrialResult(
-            trial_id=trial_id,
-            task_id=task.task_id,
-            category=task.category,
-            agent_id=agent.agent_id,
-            model_id=agent.model_id,
-            verdict=final_verdict,
-            agent_result=agent_res,
-            verifier_result=verifier_res,
-            metrics=metrics,
-        )
+        finally:
+            tracker.stop()
 
     def run_suite(
         self,
