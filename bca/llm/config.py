@@ -10,13 +10,21 @@ class BCAConfig:
     """Loads and resolves models from config/config.yml or config/config.example.yml."""
 
     @classmethod
+    def get_repo_root(cls) -> Path:
+        """Returns the benchmark-engine repository root."""
+        return Path(__file__).resolve().parents[2]
+
+    @classmethod
     def find_config_path(cls) -> Optional[Path]:
-        """Looks for config.yml or config.example.yml in root or config/ directory."""
+        """Looks for config.yml or config.example.yml in cwd or repo directory."""
+        repo_root = cls.get_repo_root()
         candidates = [
             Path.cwd() / "config" / "config.yml",
             Path.cwd() / "config" / "models.yml",
             Path.cwd() / "config.yml",
-            Path.cwd() / "config" / "config.example.yml",
+            repo_root / "config" / "config.yml",
+            repo_root / "config" / "models.yml",
+            repo_root / "config" / "config.example.yml",
         ]
         for p in candidates:
             if p.exists():

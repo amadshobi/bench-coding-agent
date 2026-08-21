@@ -83,9 +83,12 @@ Return ONLY a valid JSON object matching:
 
     def _load_system_prompt(self) -> str:
         """Loads prompt from config/agent/analytics.md or fallback to analytics.example.md."""
+        repo_root = Path(__file__).resolve().parents[2]
         candidates = [
             Path.cwd() / "config" / "agent" / "analytics.md",
             Path.cwd() / "config" / "agent" / "analytics.example.md",
+            repo_root / "config" / "agent" / "analytics.md",
+            repo_root / "config" / "agent" / "analytics.example.md",
         ]
         for p in candidates:
             if p.exists():

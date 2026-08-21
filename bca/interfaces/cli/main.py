@@ -18,6 +18,35 @@ from bca.core.types import Verdict
 from bca.interfaces.tui import render_tui_dashboard
 from bca.interfaces.web import run_web_server
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def resolve_datasets_dir(custom_path: Optional[str] = None) -> Path:
+    """Finds datasets directory in cwd or fallback to repository root."""
+    if custom_path and custom_path != "datasets":
+        p = Path(custom_path).resolve()
+        if p.exists():
+            return p
+
+    cwd_datasets = Path.cwd() / "datasets"
+    if cwd_datasets.exists() and cwd_datasets.is_dir():
+        return cwd_datasets.resolve()
+
+    repo_datasets = REPO_ROOT / "datasets"
+    if repo_datasets.exists():
+        return repo_datasets.resolve()
+
+    return cwd_datasets.resolve()
+
+
+def resolve_results_dir() -> Path:
+    """Finds results directory in cwd or fallback to repository root."""
+    cwd_results = Path.cwd() / "results"
+    if cwd_results.exists():
+        return cwd_results.resolve()
+    return (REPO_ROOT / "results").resolve()
+
+
 BACKEND_ALIASES = {
     "oc": "opencode",
     "opencode": "opencode",
@@ -161,8 +190,9 @@ def handle_execute_trials(
     preserve_sandbox: bool,
     datasets_dir_str: str,
 ) -> int:
-    root_dir = Path.cwd()
-    datasets_dir = (root_dir / datasets_dir_str).resolve()
+    datasets_dir = resolve_datasets_dir(datasets_dir_str)
+    results_dir = resolve_results_dir()
+    results_dir.mkdir(parents=True, exist_ok=True)
     loader = DatasetLoader(datasets_dir)
 
     all_tasks = loader.list_tasks(category_filter=category_arg)
@@ -195,11 +225,11 @@ def handle_execute_trials(
     print(f"   Tasks   : {len(target_tasks)} task(s)\n")
 
     runner = TrialRunner(sandbox_mode=sandbox_mode, preserve_sandbox=preserve_sandbox)
-    db_path = root_dir / "results" / "bca.sqlite3"
+    db_path = results_dir / "bca.sqlite3"
     storage = SQLiteStorage(db_path)
-    exporter = ResultExporter(root_dir / "results")
-    summarizer = BenchmarkSummarizer(root_dir / "results")
-    context_exporter = ContextExporter(root_dir / "results")
+    exporter = ResultExporter(results_dir)
+    summarizer = BenchmarkSummarizer(results_dir)
+    context_exporter = ContextExporter(results_dir)
 
     results = []
     run_idx = 1
@@ -227,7 +257,7 @@ def handle_execute_trials(
     stats = storage.get_summary_stats()
     print("\n" + "=" * 50)
     print(f"📊 Benchmark Finished! Total: {stats['total_runs']} | Passed: {stats['passed']} | Pass Rate: {stats['pass_rate_pct']}%")
-    print(f"📁 Reports saved to {root_dir / 'results'}")
+    print(f"📁 Reports saved to {results_dir}")
     return 0
 
 
@@ -236,7 +266,8 @@ def handle_list(list_type: str, datasets_dir_str: str = "datasets") -> int:
     lt = list_type.lower().strip()
 
     if lt in ("task", "tasks", "t"):
-        loader = DatasetLoader(Path(datasets_dir_str).resolve())
+        datasets_dir = resolve_datasets_dir(datasets_dir_str)
+        loader = DatasetLoader(datasets_dir)
         tasks = loader.list_tasks()
         headers = ["#", "Category", "Task ID", "Title"]
         rows = [
@@ -281,7 +312,8 @@ def handle_list(list_type: str, datasets_dir_str: str = "datasets") -> int:
         return 0
 
     # Default: summary overview card
-    loader = DatasetLoader(Path(datasets_dir_str).resolve())
+    datasets_dir = resolve_datasets_dir(datasets_dir_str)
+    loader = DatasetLoader(datasets_dir)
     tasks = loader.list_tasks()
     cfg_models = BCAConfig.load_backends()
     total_aliases = sum(len(v) for v in cfg_models.values()) if cfg_models else "dynamic"
@@ -303,8 +335,8 @@ def handle_list(list_type: str, datasets_dir_str: str = "datasets") -> int:
 
 
 def handle_report_dispatch(board: bool, markdown: bool, json_mode: bool, limit: int) -> int:
-    db_path = Path.cwd() / "results" / "bca.sqlite3"
-    results_dir = Path.cwd() / "results"
+    results_dir = resolve_results_dir()
+    db_path = results_dir / "bca.sqlite3"
 
     if json_mode:
         ReportCLI.render_json(db_path, limit=limit)
