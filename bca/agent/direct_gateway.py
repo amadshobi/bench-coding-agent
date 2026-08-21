@@ -81,6 +81,7 @@ class DirectGatewayAgent(BaseAgent):
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
         max_turns: int = 15,
+        reasoning_effort: Optional[str] = "low",
         extra_env: Optional[Dict[str, str]] = None,
         flags: Optional[List[str]] = None,
     ):
@@ -93,6 +94,7 @@ class DirectGatewayAgent(BaseAgent):
         self.base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or "http://127.0.0.1:4000/v1").rstrip("/")
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or "dummy"
         self.max_turns = max_turns
+        self.reasoning_effort = reasoning_effort
 
     def build_command(self, instruction: str) -> str:
         """Unused in direct API mode, but returns representation."""
@@ -101,13 +103,15 @@ class DirectGatewayAgent(BaseAgent):
     def _call_llm(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Makes an HTTP POST request to the OpenAI-compatible endpoint."""
         url = f"{self.base_url}/chat/completions"
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model_id,
             "messages": messages,
             "tools": TOOLS_SPEC,
             "tool_choice": "auto",
-            "temperature": 0.1,
         }
+
+        if self.reasoning_effort:
+            payload["reasoning_effort"] = self.reasoning_effort
 
         req = urllib.request.Request(
             url,
@@ -119,7 +123,7 @@ class DirectGatewayAgent(BaseAgent):
             method="POST",
         )
 
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=45) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data["choices"][0]["message"]
 
@@ -206,7 +210,7 @@ class DirectGatewayAgent(BaseAgent):
                     else:
                         output = f"Unknown tool: {name}"
 
-                    step.observations.append(Observation(tool_name=name, output=output[:1500]))
+                    step.observations.append(Observation(output=output[:1500]))
                     trajectory.add_step(step)
                     logs.append(f"[Tool: {name}] -> {output[:300]}")
 
