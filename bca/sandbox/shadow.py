@@ -1,6 +1,7 @@
 """Shadow Clone Sandbox: Mirrors entire host environment in strict Read-Only mode with isolated writable workspace."""
 
 import os
+import shlex
 import shutil
 import tempfile
 import uuid
@@ -43,6 +44,7 @@ class ShadowCloneSandbox(BaseSandbox):
         self.trial_id = trial_id or str(uuid.uuid4())
         self.base_dir = base_dir or Path(tempfile.gettempdir()) / "bca" / "trials" / self.trial_id
         self._workspace = self.base_dir / "workspace"
+        self._omp_scratch = self.base_dir / "omp"
         self.preserve_on_exit = preserve_on_exit
         self.bwrap_path = shutil.which("bwrap")
         self._local_fallback = LocalSandbox(
@@ -62,6 +64,13 @@ class ShadowCloneSandbox(BaseSandbox):
 
     def setup(self, starter_dir: Optional[Path] = None) -> None:
         self._local_fallback.setup(starter_dir)
+        # Prepare ephemeral omp state for SQLite write compatibility
+        omp_host = Path.home() / ".omp"
+        if omp_host.exists() and not self._omp_scratch.exists():
+            try:
+                shutil.copytree(omp_host, self._omp_scratch, dirs_exist_ok=True)
+            except Exception:
+                pass
 
     def _check_dangerous_command(self, cmd: str) -> None:
         for pat in DANGEROUS_PATTERNS:
@@ -88,14 +97,10 @@ class ShadowCloneSandbox(BaseSandbox):
 
         ws_str = str(self._workspace.resolve())
         target_cwd_str = str(target_cwd.resolve())
+        omp_host_str = str((Path.home() / ".omp").resolve())
+        omp_scratch_str = str(self._omp_scratch.resolve()) if self._omp_scratch.exists() else None
 
         # Construct Bubblewrap command
-        # --ro-bind / / : Entire OS is mirrored as Read-Only
-        # --dev /dev, --proc /proc : Standard system nodes
-        # --tmpfs /tmp : Isolated tmp
-        # --bind <workspace> <workspace> : Only workspace is writable
-        # --chdir <target_cwd> : Set working directory
-        # --unshare-pid : Isolate process table from host
         bwrap_args = [
             self.bwrap_path,
             "--ro-bind", "/", "/",
@@ -103,13 +108,19 @@ class ShadowCloneSandbox(BaseSandbox):
             "--proc", "/proc",
             "--tmpfs", "/tmp",
             "--bind", ws_str, ws_str,
+        ]
+
+        if omp_scratch_str:
+            bwrap_args.extend(["--bind", omp_scratch_str, omp_host_str])
+
+        bwrap_args.extend([
             "--chdir", target_cwd_str,
             "--unshare-pid",
             "--",
             "bash", "-c", cmd,
-        ]
+        ])
 
-        full_cmd = " ".join(bwrap_args)
+        full_cmd = shlex.join(bwrap_args)
         proc_res = run_command_safe(
             cmd=full_cmd,
             cwd=self._workspace,
